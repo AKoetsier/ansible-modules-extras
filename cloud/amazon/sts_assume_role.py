@@ -20,8 +20,8 @@ module: sts_assume_role
 short_description: Assume a role using AWS Security Token Service and obtain temporary credentials
 description:
     - Assume a role using AWS Security Token Service and obtain temporary credentials
-version_added: "2.0"
-author: Boris Ekelchik (@bekelchik)
+version_added: "2.X"
+author: Andres Koetsier (@AKoetsier)
 options:
   role_arn:
     description:
@@ -85,31 +85,58 @@ ec2_tag:
 '''
 
 try:
-    import boto.sts
-    from boto.exception import BotoServerError
-    HAS_BOTO = True
+    import boto3
+    import botocore
+    HAS_BOTO3 = True
 except ImportError:
-    HAS_BOTO = False
+    HAS_BOTO3 = False
 
 
-def assume_role_policy(connection, module):
-
-    role_arn = module.params.get('role_arn')
-    role_session_name = module.params.get('role_session_name')
+def assume_role_policy(client, module):
+    args = dict(
+      RoleArn=module.params.get('role_arn'),
+      RoleSessionName=module.params.get('role_session_name')
+    )
     policy = module.params.get('policy')
+    if policy is not None:
+      args['Policy'] = policy
+
     duration_seconds = module.params.get('duration_seconds')
+    if duration_seconds is not None:
+      args['DurationSeconds'] = duration_seconds
+
     external_id = module.params.get('external_id')
+    if external_id is not None:
+      args['ExternalId'] = external_id
+
     mfa_serial_number = module.params.get('mfa_serial_number')
+    if mfa_serial_number is not None:
+      args['SerialNumber'] = mfa_serial_number
+
     mfa_token = module.params.get('mfa_token')
+    if mfa_token is not None:
+      args['TokenCode'] = mfa_token
     changed = False
 
     try:
-        assumed_role = connection.assume_role(role_arn, role_session_name, policy, duration_seconds, external_id, mfa_serial_number, mfa_token)
+        assumed_role = client.assume_role(**args)
         changed = True
-    except BotoServerError, e:
+    except botocore.exceptions.ClientError:
+        e = get_exception()
         module.fail_json(msg=e)
 
-    module.exit_json(changed=changed, sts_creds=assumed_role.credentials.__dict__, sts_user=assumed_role.user.__dict__)
+    sts_creds = dict(
+      access_key=assumed_role['Credentials']['AccessKeyId'],
+      secret_key=assumed_role['Credentials']['SecretAccessKey'],
+      session_token=assumed_role['Credentials']['SessionToken'],
+      expiration=assumed_role['Credentials']['Expiration']
+    )
+    sts_user = dict(
+      arn=assumed_role['AssumedRoleUser']['Arn'],
+      assume_role_id=assumed_role['AssumedRoleUser']['AssumedRoleId']
+    )
+
+    module.exit_json(changed=changed, sts_creds=sts_creds, sts_user=sts_user)
 
 def main():
     argument_spec = ec2_argument_spec()
@@ -127,22 +154,24 @@ def main():
 
     module = AnsibleModule(argument_spec=argument_spec)
 
-    if not HAS_BOTO:
-        module.fail_json(msg='boto required for this module')
+    if not HAS_BOTO3:
+        module.fail_json(msg='boto3 required for this module')
 
-    region, ec2_url, aws_connect_params = get_aws_connection_info(module)
+    region, ec2_url, aws_connect_kwargs = get_aws_connection_info(module, boto3=True)
 
     if region:
         try:
-            connection = connect_to_aws(boto.sts, region, **aws_connect_params)
-        except (boto.exception.NoAuthHandlerFound, AnsibleAWSError), e:
+            client = boto3_conn(module, conn_type='client', resource='sts', region=region, endpoint=ec2_url, **aws_connect_kwargs)
+        except botocore.exceptions.ClientError:
+            e = get_exception()
             module.fail_json(msg=str(e))
     else:
         module.fail_json(msg="region must be specified")
 
     try:
-        assume_role_policy(connection, module)
-    except BotoServerError, e:
+        assume_role_policy(client, module)
+    except botocore.exceptions.ClientError:
+        e = get_exception()
         module.fail_json(msg=e)
 
 
