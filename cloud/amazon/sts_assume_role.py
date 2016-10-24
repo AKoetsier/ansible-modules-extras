@@ -86,10 +86,13 @@ ec2_tag:
 
 try:
     import boto3
-    import botocore
+    from botocore.exceptions import ClientError
     HAS_BOTO3 = True
 except ImportError:
     HAS_BOTO3 = False
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.ec2 import boto3_conn, ec2_argument_spec, get_aws_connection_info
 
 
 def assume_role_policy(client, module):
@@ -121,8 +124,7 @@ def assume_role_policy(client, module):
     try:
         assumed_role = client.assume_role(**args)
         changed = True
-    except botocore.exceptions.ClientError:
-        e = get_exception()
+    except ClientError as e:
         module.fail_json(msg=e)
 
     sts_creds = dict(
@@ -162,22 +164,16 @@ def main():
     if region:
         try:
             client = boto3_conn(module, conn_type='client', resource='sts', region=region, endpoint=ec2_url, **aws_connect_kwargs)
-        except botocore.exceptions.ClientError:
-            e = get_exception()
+        except ClientError as e:
             module.fail_json(msg=str(e))
     else:
         module.fail_json(msg="region must be specified")
 
     try:
         assume_role_policy(client, module)
-    except botocore.exceptions.ClientError:
-        e = get_exception()
+    except ClientError as e:
         module.fail_json(msg=e)
 
-
-# import module snippets
-from ansible.module_utils.basic import *
-from ansible.module_utils.ec2 import *
 
 if __name__ == '__main__':
     main()

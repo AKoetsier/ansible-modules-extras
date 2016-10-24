@@ -113,22 +113,29 @@ author:
 '''
 
 EXAMPLES = '''
-- irc: server=irc.example.net channel="#t1" msg="Hello world"
+- irc:
+    server: irc.example.net
+    channel: "#t1"
+    msg: "Hello world"
 
-- local_action: irc port=6669
-                server="irc.example.net"
-                channel="#t1"
-                msg="All finished at {{ ansible_date_time.iso8601 }}"
-                color=red
-                nick=ansibleIRC
+- local_action:
+    module: irc
+    port: 6669
+    server: "irc.example.net"
+    channel: "#t1"
+    msg: "All finished at {{ ansible_date_time.iso8601 }}"
+    color: red
+    nick: ansibleIRC
 
-- local_action: irc port=6669
-                server="irc.example.net"
-                channel="#t1"
-                nick_to=["nick1", "nick2"]
-                msg="All finished at {{ ansible_date_time.iso8601 }}"
-                color=red
-                nick=ansibleIRC
+- local_action:
+    module: irc
+    port: 6669
+    server: "irc.example.net"
+    channel: "#t1"
+    nick_to: ["nick1", "nick2"]
+    msg: "All finished at {{ ansible_date_time.iso8601 }}"
+    color: red
+    nick: ansibleIRC
 '''
 
 # ===========================================
@@ -289,7 +296,8 @@ def main():
 
     try:
         send_msg(msg, server, port, channel, nick_to, key, topic, nick, color, passwd, timeout, use_ssl, part, style)
-    except Exception, e:
+    except Exception:
+        e = get_exception()
         module.fail_json(msg="unable to send to IRC: %s" % e)
 
     module.exit_json(changed=False, channel=channel, nick=nick,
@@ -297,4 +305,5 @@ def main():
 
 # import module snippets
 from ansible.module_utils.basic import *
+from ansible.module_utils.pycompat24 import get_exception
 main()

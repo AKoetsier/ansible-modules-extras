@@ -191,7 +191,7 @@ def check_compatibility(module, client):
     elif loose_srv_version >= LooseVersion('3.0') and loose_driver_version <= LooseVersion('2.8'):
         module.fail_json(msg=' (Note: you must use pymongo 2.8+ with MongoDB 3.0)')
 
-    elif loose_srv_version >= LooseVersion('2.6') and loose_srv_version <= LooseVersion('2.7'):
+    elif loose_srv_version >= LooseVersion('2.6') and loose_driver_version <= LooseVersion('2.7'):
         module.fail_json(msg=' (Note: you must use pymongo 2.7+ with MongoDB 2.6)')
 
     elif LooseVersion(PyMongoVersion) <= LooseVersion('2.5'):
@@ -371,7 +371,8 @@ def main():
                 module.fail_json(msg='The localhost login exception only allows the first admin account to be created')
             #else: this has to be the first admin user added
 
-    except Exception, e:
+    except Exception:
+        e = get_exception()
         module.fail_json(msg='unable to connect to database: %s' % str(e))
 
     if state == 'present':
@@ -389,7 +390,8 @@ def main():
                 module.exit_json(changed=True, user=user)
 
             user_add(module, client, db_name, user, password, roles)
-        except Exception, e:
+        except Exception:
+            e = get_exception()
             module.fail_json(msg='Unable to add or update user: %s' % str(e))
 
             # Here we can  check password change if mongo provide a query for that : https://jira.mongodb.org/browse/SERVER-22848
@@ -400,11 +402,13 @@ def main():
     elif state == 'absent':
         try:
             user_remove(module, client, db_name, user)
-        except Exception, e:
+        except Exception:
+            e = get_exception()
             module.fail_json(msg='Unable to remove user: %s' % str(e))
 
     module.exit_json(changed=True, user=user)
 
 # import module snippets
 from ansible.module_utils.basic import *
+from ansible.module_utils.pycompat24 import get_exception
 main()
